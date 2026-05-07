@@ -47,6 +47,13 @@ export default function ThisDayCanvasScreen() {
     [allSelfRespectLogs, todayStart, tomorrowStart]
   );
 
+  // Points (in canvas content-frame coords) that the canvas should track for
+  // off-screen detection / "Recenter" pill behavior.
+  const trackedPoints = useMemo(() => {
+    const list = entryMode === 'emotion' ? emotionLogs : selfRespectLogs;
+    return list.map((l) => ({ x: ORIGIN + l.xPos, y: ORIGIN + l.yPos }));
+  }, [entryMode, emotionLogs, selfRespectLogs]);
+
   const addEmotionLog = useTrackingStore((s) => s.addEmotionLog);
   const addSelfRespectLog = useTrackingStore((s) => s.addSelfRespectLog);
 
@@ -94,7 +101,12 @@ export default function ThisDayCanvasScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      <InfiniteCanvas contentSize={CONTENT_SIZE} minScale={0.5} maxScale={3}>
+      <InfiniteCanvas
+        contentSize={CONTENT_SIZE}
+        minScale={0.5}
+        maxScale={3}
+        trackedPoints={trackedPoints}
+      >
         {entryMode === 'emotion'
           ? emotionLogs.map((l) => (
               <View

@@ -43,6 +43,11 @@ export default function MyProgressScreen() {
   const emotionLogs = useTrackingStore((s) => s.emotionLogs);
   const selfRespectLogs = useTrackingStore((s) => s.selfRespectLogs);
 
+  const chaosTrackedPoints = useMemo(
+    () => emotionLogs.map((e) => ({ x: ORIGIN + e.xPos, y: ORIGIN + e.yPos })),
+    [emotionLogs]
+  );
+
   const sections = useMemo<TimelineSection[]>(() => {
     const map = new Map<string, TimelineItem[]>();
 
@@ -101,7 +106,13 @@ export default function MyProgressScreen() {
       </View>
 
       {mode === 'chaos' ? (
-        <InfiniteCanvas contentSize={CONTENT_SIZE} minScale={0.45} maxScale={3} enableDoubleTapReset>
+        <InfiniteCanvas
+          contentSize={CONTENT_SIZE}
+          minScale={0.45}
+          maxScale={3}
+          enableDoubleTapReset
+          trackedPoints={chaosTrackedPoints}
+        >
           {emotionLogs.length === 0 ? (
             <View style={[styles.emptyHint, { left: ORIGIN - 150, top: ORIGIN - 32 }]}>
               <Text style={styles.emptyHintTitle}>No emotions logged yet</Text>
