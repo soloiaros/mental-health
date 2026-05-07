@@ -1,152 +1,122 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View, useColorScheme } from 'react-native';
-import { InfiniteCanvas } from '@/components/InfiniteCanvas';
-import { useTrackingStore } from '@/store/trackingStore';
-
-function startOfLocalDayMs(ms: number) {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
-
-const CONTENT_SIZE = 4000;
-const ORIGIN = CONTENT_SIZE / 2;
+import React from 'react';
+import { Pressable, StyleSheet, Text, View, useColorScheme } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 export default function ThisDayScreen() {
   const scheme = useColorScheme();
   const isDark = scheme === 'dark';
 
-  // IMPORTANT: select raw arrays only (stable snapshots), then filter via useMemo.
-  // Filtering inside the selector creates a new array each snapshot, which can trigger
-  // React's "getSnapshot should be cached" warning and lead to update-depth loops.
-  const allEmotionLogs = useTrackingStore((s) => s.emotionLogs);
-  const allSelfRespectLogs = useTrackingStore((s) => s.selfRespectLogs);
-
-  const todayStart = useMemo(() => startOfLocalDayMs(Date.now()), []);
-  const tomorrowStart = todayStart + 24 * 60 * 60 * 1000;
-
-  const emotionLogs = useMemo(
-    () => allEmotionLogs.filter((l) => l.timestamp >= todayStart && l.timestamp < tomorrowStart),
-    [allEmotionLogs, todayStart, tomorrowStart]
-  );
-
-  const selfRespectLogs = useMemo(
-    () => allSelfRespectLogs.filter((l) => l.timestamp >= todayStart && l.timestamp < tomorrowStart),
-    [allSelfRespectLogs, todayStart, tomorrowStart]
-  );
-
   return (
     <View style={[styles.screen, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      <InfiniteCanvas contentSize={CONTENT_SIZE} minScale={0.5} maxScale={3}>
-        {/* Emotions */}
-        {emotionLogs.map((l) => (
-          <View
-            key={l.id}
-            style={[
-              styles.emotionBubble,
-              {
-                left: ORIGIN + l.xPos - BUBBLE / 2,
-                top: ORIGIN + l.yPos - BUBBLE / 2,
-              },
-            ]}
-          >
-            <Text numberOfLines={2} style={styles.emotionText}>
-              {l.content}
-            </Text>
-          </View>
-        ))}
+      <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>This Day</Text>
+      <Text style={[styles.subtitle, { color: isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.62)' }]}>
+        Choose what you want to track today.
+      </Text>
 
-        {/* Self-respect actions */}
-        {selfRespectLogs.map((l) => (
-          <View
-            key={l.id}
-            style={[
-              styles.respectCard,
-              {
-                left: ORIGIN + l.xPos - CARD_W / 2,
-                top: ORIGIN + l.yPos - CARD_H / 2,
-              },
-            ]}
-          >
-            <Text numberOfLines={3} style={styles.respectText}>
-              {l.description}
-            </Text>
-          </View>
-        ))}
-
-        {emotionLogs.length === 0 && selfRespectLogs.length === 0 ? (
-          <View style={[styles.emptyHint, { left: ORIGIN - 140, top: ORIGIN - 32 }]}>
-            <Text style={styles.emptyHintTitle}>No logs for today yet</Text>
-            <Text style={styles.emptyHintSubtitle}>Phase 3 adds the FAB + bottom sheet input.</Text>
-          </View>
-        ) : null}
-      </InfiniteCanvas>
+      <View style={styles.cards}>
+        <HubCard
+          title="Emotion Canvas"
+          description="Drop feelings as bubbles on an infinite space."
+          icon="heart-outline"
+          onPress={() => router.push('/(tabs)/this-day-canvas?mode=emotion&open=1')}
+        />
+        <HubCard
+          title="Self-Respect Wall"
+          description="Log boundaries and wins as golden cards."
+          icon="shield-checkmark-outline"
+          onPress={() => router.push('/(tabs)/this-day-canvas?mode=selfRespect&open=1')}
+        />
+      </View>
     </View>
   );
 }
 
-const BUBBLE = 88;
-const CARD_W = 220;
-const CARD_H = 90;
+function HubCard({
+  title,
+  description,
+  icon,
+  onPress,
+}: {
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}>
+      <View style={styles.cardIcon}>
+        <Ionicons name={icon} size={20} color="#0B0B0C" />
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDesc}>{description}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color="rgba(0,0,0,0.55)" />
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 22,
   },
-  emotionBubble: {
-    position: 'absolute',
-    width: BUBBLE,
-    height: BUBBLE,
-    borderRadius: BUBBLE / 2,
-    backgroundColor: '#2D2AFA',
+  title: {
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+  },
+  subtitle: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  cards: {
+    marginTop: 18,
+    gap: 12,
+  },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderColor: 'rgba(0,0,0,0.08)',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
+  },
+  cardPressed: {
+    transform: [{ scale: 0.99 }],
+    opacity: 0.92,
+  },
+  cardIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  emotionText: {
-    color: '#fff',
+  cardBody: {
+    flex: 1,
+  },
+  cardTitle: {
+    color: '#0B0B0C',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  cardDesc: {
+    marginTop: 2,
+    color: 'rgba(0,0,0,0.6)',
     fontSize: 13,
     fontWeight: '700',
-    textAlign: 'center',
-  },
-  respectCard: {
-    position: 'absolute',
-    width: CARD_W,
-    height: CARD_H,
-    borderRadius: 14,
-    backgroundColor: '#C9A227',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.22)',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    justifyContent: 'center',
-  },
-  respectText: {
-    color: '#1B1200',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  emptyHint: {
-    position: 'absolute',
-    width: 280,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  emptyHintTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  emptyHintSubtitle: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '600',
   },
 });
 

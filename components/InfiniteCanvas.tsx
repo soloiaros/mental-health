@@ -69,6 +69,8 @@ export function InfiniteCanvas({
 
   const gestures = useMemo(() => {
     const pan = Gesture.Pan()
+      // Prevent the pan gesture from stealing simple taps (e.g., the FAB overlay).
+      .minDistance(8)
       .onBegin(() => {
         panStartX.value = translateX.value;
         panStartY.value = translateY.value;

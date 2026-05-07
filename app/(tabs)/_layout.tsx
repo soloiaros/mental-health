@@ -6,6 +6,7 @@ export default function TabLayout() {
   return (
     <Tabs initialRouteName="this-day" screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="index" options={{ href: null }} />
+      <Tabs.Screen name="this-day-canvas" options={{ href: null }} />
       <Tabs.Screen
         name="this-day"
         options={{
