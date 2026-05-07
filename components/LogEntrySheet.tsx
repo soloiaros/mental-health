@@ -1,8 +1,19 @@
-import React, { forwardRef, useCallback, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
+import React, { forwardRef, useCallback, useMemo, useRef, useState } from 'react';
+import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetView,
+} from '@gorhom/bottom-sheet';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 
 import type { EmotionLogType } from '@/store/trackingStore';
+import { colors, radii, shadows, spacing, text } from '@/theme';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
+import { TouchableTap } from '@/components/ui/TouchableTap';
+import { GiphyPicker, type GiphyPickerHandle } from '@/components/GiphyPicker';
+import type { GiphyGif } from '@/services/giphyApi';
 
 export type LogEntrySheetHandle = {
   open: () => void;
@@ -13,25 +24,24 @@ export type LogEntryPayload =
   | { kind: 'emotion'; type: EmotionLogType; content: string }
   | { kind: 'selfRespect'; description: string };
 
+type Mode = 'emotion' | 'selfRespect';
+
 export const LogEntrySheet = forwardRef<
   LogEntrySheetHandle,
   {
     onSubmit: (payload: LogEntryPayload) => void;
-    initialMode?: 'emotion' | 'selfRespect';
-    /**
-     * When provided, the sheet becomes a single-purpose entry surface
-     * and the mode toggle is hidden.
-     */
-    lockedMode?: 'emotion' | 'selfRespect';
+    initialMode?: Mode;
   }
->(function LogEntrySheet({ onSubmit, initialMode = 'emotion', lockedMode }, ref) {
-  const snapPoints = useMemo(() => ['50%', '80%'], []);
-  const [mode, setMode] = useState<'emotion' | 'selfRespect'>(initialMode);
+>(function LogEntrySheet({ onSubmit, initialMode = 'emotion' }, ref) {
+  const snapPoints = useMemo(() => ['62%', '92%'], []);
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [emotionType, setEmotionType] = useState<EmotionLogType>('text');
   const [emotionContent, setEmotionContent] = useState('');
+  const [selectedGif, setSelectedGif] = useState<GiphyGif | null>(null);
   const [respectDescription, setRespectDescription] = useState('');
 
-  const modalRef = React.useRef<BottomSheetModal>(null);
+  const modalRef = useRef<BottomSheetModal>(null);
+  const pickerRef = useRef<GiphyPickerHandle>(null);
 
   React.useImperativeHandle(
     ref,
@@ -43,223 +53,421 @@ export const LogEntrySheet = forwardRef<
   );
 
   const renderBackdrop = useCallback(
-    (props: any) => <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />,
+    (props: any) => (
+      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.45} />
+    ),
     []
   );
 
-  const submit = useCallback(() => {
-    const effectiveMode = lockedMode ?? mode;
+  const reset = useCallback(() => {
+    setEmotionContent('');
+    setSelectedGif(null);
+    setRespectDescription('');
+    setEmotionType('text');
+  }, []);
 
-    if (effectiveMode === 'emotion') {
-      const content = emotionContent.trim();
+  const handleGifSelect = useCallback((gif: GiphyGif) => {
+    setSelectedGif(gif);
+    // The content we store is the display URL so it can be rendered.
+    setEmotionContent(gif.displayUrl);
+  }, []);
+
+  const openGiphyPicker = useCallback(() => {
+    setEmotionType('media_uri');
+    // Small delay so the type-switch animation plays before the picker opens.
+    setTimeout(() => pickerRef.current?.open(), 120);
+  }, []);
+
+  const submit = useCallback(() => {
+    if (mode === 'emotion') {
+      const content = emotionType === 'media_uri'
+        ? (selectedGif?.displayUrl ?? '').trim()
+        : emotionContent.trim();
       if (!content) return;
       onSubmit({ kind: 'emotion', type: emotionType, content });
-      setEmotionContent('');
-      modalRef.current?.dismiss();
-      return;
+    } else {
+      const description = respectDescription.trim();
+      if (!description) return;
+      onSubmit({ kind: 'selfRespect', description });
     }
-
-    const description = respectDescription.trim();
-    if (!description) return;
-    onSubmit({ kind: 'selfRespect', description });
-    setRespectDescription('');
+    reset();
     modalRef.current?.dismiss();
-  }, [emotionContent, emotionType, lockedMode, mode, onSubmit, respectDescription]);
+  }, [emotionContent, emotionType, mode, onSubmit, reset, respectDescription, selectedGif]);
 
-  const effectiveMode = lockedMode ?? mode;
+  const isEmotion = mode === 'emotion';
+  const isGif = emotionType === 'media_uri';
 
-  const primaryDisabled =
-    effectiveMode === 'emotion' ? emotionContent.trim().length === 0 : respectDescription.trim().length === 0;
+  const submitDisabled = isEmotion
+    ? isGif
+      ? selectedGif === null
+      : emotionContent.trim().length === 0
+    : respectDescription.trim().length === 0;
 
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={snapPoints}
-      backdropComponent={renderBackdrop}
-      enableDynamicSizing={false}
-    >
-      <BottomSheetView style={styles.container}>
-        <Text style={styles.title}>Log something</Text>
+    <>
+      <BottomSheetModal
+        ref={modalRef}
+        snapPoints={snapPoints}
+        backdropComponent={renderBackdrop}
+        enableDynamicSizing={false}
+        handleStyle={styles.handleStyle}
+        handleIndicatorStyle={styles.handleIndicator}
+        backgroundStyle={styles.background}
+        onDismiss={reset}
+      >
+        <BottomSheetView style={styles.container}>
+          <Text style={styles.title}>
+            {isEmotion ? 'How are you feeling right now?' : 'What boundary did you honor?'}
+          </Text>
 
-        {!lockedMode ? (
-          <View style={styles.segment}>
-            <SegmentButton active={mode === 'emotion'} label="Emotion" onPress={() => setMode('emotion')} />
-            <SegmentButton
-              active={mode === 'selfRespect'}
-              label="Boundary / Self-Respect"
-              onPress={() => setMode('selfRespect')}
+          {/* Input area — text/emoji TextInput or GIF picker surface */}
+          {isEmotion && isGif ? (
+            <GifInputArea
+              selected={selectedGif}
+              onPickPress={() => pickerRef.current?.open()}
+              onClear={() => {
+                setSelectedGif(null);
+                setEmotionContent('');
+              }}
+            />
+          ) : (
+            <View style={styles.inputWrap}>
+              {isEmotion ? (
+                <TextInput
+                  value={emotionContent}
+                  onChangeText={setEmotionContent}
+                  placeholder={
+                    emotionType === 'emoji'
+                      ? 'Type or paste an emoji…'
+                      : 'Write what surfaces…'
+                  }
+                  placeholderTextColor={colors.outline}
+                  style={styles.input}
+                  multiline
+                  autoCorrect
+                  maxLength={500}
+                />
+              ) : (
+                <TextInput
+                  value={respectDescription}
+                  onChangeText={setRespectDescription}
+                  placeholder="Example: I declined an extra project to protect my evening."
+                  placeholderTextColor={colors.outline}
+                  style={styles.input}
+                  multiline
+                  autoCorrect
+                  maxLength={500}
+                />
+              )}
+            </View>
+          )}
+
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleLabel}>Categorize entry</Text>
+            <SegmentedControl<Mode>
+              value={mode}
+              options={[
+                { value: 'emotion', label: 'Emotion' },
+                { value: 'selfRespect', label: 'Action' },
+              ]}
+              onChange={setMode}
+              style={styles.toggle}
             />
           </View>
-        ) : null}
 
-        {effectiveMode === 'emotion' ? (
-          <>
-            <Text style={styles.sectionLabel}>Type</Text>
-            <View style={styles.pillsRow}>
-              <Pill active={emotionType === 'text'} label="Text" onPress={() => setEmotionType('text')} />
-              <Pill active={emotionType === 'emoji'} label="Emoji" onPress={() => setEmotionType('emoji')} />
-              <Pill active={emotionType === 'media_uri'} label="Meme/GIF URL" onPress={() => setEmotionType('media_uri')} />
+          {isEmotion ? (
+            <View style={styles.bottomBar}>
+              <View style={styles.toolRow}>
+                <ToolButton
+                  icon="edit-note"
+                  accessibilityLabel="Text entry"
+                  active={emotionType === 'text'}
+                  onPress={() => setEmotionType('text')}
+                />
+                <ToolButton
+                  icon="mood"
+                  accessibilityLabel="Emoji entry"
+                  active={emotionType === 'emoji'}
+                  onPress={() => setEmotionType('emoji')}
+                />
+                {/* GIF button opens the Giphy picker directly */}
+                <ToolButton
+                  icon="gif"
+                  accessibilityLabel="Pick a GIF"
+                  active={emotionType === 'media_uri'}
+                  onPress={openGiphyPicker}
+                />
+              </View>
+
+              <SubmitButton onPress={submit} disabled={submitDisabled} />
             </View>
+          ) : (
+            <View style={[styles.bottomBar, styles.bottomBarEnd]}>
+              <SubmitButton onPress={submit} disabled={submitDisabled} />
+            </View>
+          )}
+        </BottomSheetView>
+      </BottomSheetModal>
 
-            <Text style={styles.sectionLabel}>What are you feeling?</Text>
-            <TextInput
-              value={emotionContent}
-              onChangeText={setEmotionContent}
-              placeholder={emotionType === 'media_uri' ? 'Paste a GIF/meme URI…' : emotionType === 'emoji' ? 'Type an emoji…' : 'Write freely…'}
-              placeholderTextColor="rgba(0,0,0,0.4)"
-              style={styles.input}
-              multiline
-            />
-          </>
-        ) : (
-          <>
-            <Text style={styles.sectionLabel}>What boundary / self-respect action did you take?</Text>
-            <TextInput
-              value={respectDescription}
-              onChangeText={setRespectDescription}
-              placeholder="Example: Said no to a draining plan."
-              placeholderTextColor="rgba(0,0,0,0.4)"
-              style={styles.input}
-              multiline
-            />
-          </>
-        )}
-
-        <Pressable
-          accessibilityRole="button"
-          onPress={submit}
-          disabled={primaryDisabled}
-          style={({ pressed }) => [
-            styles.primaryButton,
-            primaryDisabled && styles.primaryButtonDisabled,
-            pressed && !primaryDisabled && styles.primaryButtonPressed,
-          ]}
-        >
-          <Text style={styles.primaryButtonText}>Add to canvas</Text>
-        </Pressable>
-      </BottomSheetView>
-    </BottomSheetModal>
+      {/* Giphy picker sits as a second stacked modal */}
+      <GiphyPicker ref={pickerRef} onSelect={handleGifSelect} />
+    </>
   );
 });
 
-function SegmentButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+// ---------------------------------------------------------------------------
+// Sub-components
+// ---------------------------------------------------------------------------
+
+function GifInputArea({
+  selected,
+  onPickPress,
+  onClear,
+}: {
+  selected: GiphyGif | null;
+  onPickPress: () => void;
+  onClear: () => void;
+}) {
+  if (!selected) {
+    return (
+      <TouchableTap onPress={onPickPress} accessibilityLabel="Open GIF picker" style={styles.gifPlaceholder}>
+        <MaterialIcons name="gif" size={40} color={colors.primary} />
+        <Text style={styles.gifPlaceholderText}>Tap to pick a GIF</Text>
+        <Text style={styles.gifPlaceholderSub}>Browse trending or search Giphy</Text>
+      </TouchableTap>
+    );
+  }
+
+  const previewH = Math.round(160 / (selected.aspectRatio || 1));
+
   return (
-    <Pressable onPress={onPress} style={[styles.segmentBtn, active && styles.segmentBtnActive]}>
-      <Text style={[styles.segmentBtnText, active && styles.segmentBtnTextActive]}>{label}</Text>
-    </Pressable>
+    <View style={styles.gifPreviewWrap}>
+      <Image
+        source={{ uri: selected.displayUrl }}
+        style={[styles.gifPreview, { height: Math.max(100, Math.min(200, previewH)) }]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+      />
+      <View style={styles.gifPreviewActions}>
+        <TouchableTap onPress={onPickPress} accessibilityLabel="Change GIF" style={styles.gifActionBtn}>
+          <MaterialIcons name="refresh" size={16} color={colors.primary} />
+          <Text style={styles.gifActionText}>Change</Text>
+        </TouchableTap>
+        <TouchableTap onPress={onClear} accessibilityLabel="Remove GIF" style={styles.gifActionBtn}>
+          <MaterialIcons name="close" size={16} color={colors.error} />
+          <Text style={[styles.gifActionText, { color: colors.error }]}>Remove</Text>
+        </TouchableTap>
+      </View>
+    </View>
   );
 }
 
-function Pill({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+function ToolButton({
+  icon,
+  active,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: React.ComponentProps<typeof MaterialIcons>['name'];
+  active?: boolean;
+  onPress: () => void;
+  accessibilityLabel?: string;
+}) {
   return (
-    <Pressable onPress={onPress} style={[styles.pill, active && styles.pillActive]}>
-      <Text style={[styles.pillText, active && styles.pillTextActive]}>{label}</Text>
-    </Pressable>
+    <TouchableTap onPress={onPress} accessibilityLabel={accessibilityLabel}>
+      <View
+        style={[
+          styles.toolBtn,
+          active && { backgroundColor: colors.primaryFixed, borderColor: colors.primaryFixedDim },
+        ]}
+      >
+        <MaterialIcons name={icon} size={20} color={active ? colors.primary : colors.secondary} />
+      </View>
+    </TouchableTap>
   );
 }
+
+function SubmitButton({ onPress, disabled }: { onPress: () => void; disabled?: boolean }) {
+  return (
+    <TouchableTap onPress={onPress} disabled={disabled} accessibilityLabel="Add to canvas">
+      <View style={[styles.submit, disabled && styles.submitDisabled]}>
+        <MaterialIcons name="arrow-upward" size={22} color={colors.onPrimary} />
+      </View>
+    </TouchableTap>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  handleStyle: {
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  handleIndicator: {
+    backgroundColor: colors.outlineVariant,
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+  },
+  background: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#1F1635',
+        shadowOpacity: 0.18,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: -8 },
+      },
+      android: { elevation: 16 },
+    }),
+  },
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 20,
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.unit,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0B0B0C',
+    ...text.h3,
+    fontSize: 22,
+    color: colors.onSurface,
   },
-  segment: {
-    marginTop: 12,
-    flexDirection: 'row',
-    padding: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  segmentBtnActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  segmentBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: 'rgba(0,0,0,0.6)',
-  },
-  segmentBtnTextActive: {
-    color: '#0B0B0C',
-  },
-  sectionLabel: {
-    marginTop: 14,
-    fontSize: 12,
-    fontWeight: '900',
-    color: 'rgba(0,0,0,0.7)',
-  },
-  pillsRow: {
-    marginTop: 8,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-  },
-  pillActive: {
-    backgroundColor: '#0B0B0C',
-  },
-  pillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: 'rgba(0,0,0,0.7)',
-  },
-  pillTextActive: {
-    color: '#fff',
+  // -- Text / emoji input --
+  inputWrap: {
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    minHeight: 140,
   },
   input: {
-    marginTop: 8,
-    minHeight: 96,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.04)',
-    color: '#0B0B0C',
-    fontSize: 14,
-    fontWeight: '700',
+    ...text.bodyLg,
+    fontSize: 18,
+    lineHeight: 26,
+    minHeight: 120,
+    color: colors.onSurface,
+    textAlignVertical: 'top',
   },
-  primaryButton: {
-    marginTop: 14,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#0B0B0C',
+  // -- GIF placeholder --
+  gifPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: radii.lg,
+    borderWidth: 2,
+    borderColor: colors.primaryFixed,
+    borderStyle: 'dashed',
+    paddingVertical: spacing.md + 8,
+    backgroundColor: colors.surfaceContainerLow,
+    gap: spacing.xs,
   },
-  primaryButtonDisabled: {
-    opacity: 0.35,
+  gifPlaceholderText: {
+    ...text.bodyMd,
+    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
   },
-  primaryButtonPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.99 }],
+  gifPlaceholderSub: {
+    ...text.labelSm,
+    color: colors.onSurfaceVariant,
   },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
+  // -- GIF preview --
+  gifPreviewWrap: {
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceContainer,
+    ...shadows.raisedSm,
+  },
+  gifPreview: {
+    width: '100%',
+    borderTopLeftRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+  },
+  gifPreviewActions: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.unit,
+    gap: spacing.md,
+    backgroundColor: colors.surfaceContainerLow,
+  },
+  gifActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+  },
+  gifActionText: {
+    ...text.labelSm,
+    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
+  },
+  // -- Mode toggle --
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surfaceContainerLow,
+    borderRadius: radii.lg,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.unit,
+    paddingVertical: spacing.unit,
+    gap: spacing.sm,
+  },
+  toggleLabel: {
+    ...text.labelSm,
+    color: colors.onSurfaceVariant,
+    flexShrink: 1,
+  },
+  toggle: {
+    minWidth: 200,
+  },
+  // -- Bottom bar --
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 'auto',
+  },
+  bottomBarEnd: {
+    justifyContent: 'flex-end',
+  },
+  toolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.unit,
+  },
+  toolBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
+    backgroundColor: colors.surfaceContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'transparent',
+    ...shadows.raisedSm,
+  },
+  submit: {
+    width: 52,
+    height: 52,
+    borderRadius: radii.full,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  submitDisabled: {
+    backgroundColor: colors.outline,
+    shadowOpacity: 0,
   },
 });
-
-

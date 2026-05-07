@@ -1,43 +1,48 @@
 import React, { useMemo, useState } from 'react';
-import { Pressable, SectionList, StyleSheet, Text, View, useColorScheme } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSpring } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 
 import { InfiniteCanvas } from '@/components/InfiniteCanvas';
+import { TopAppBar, TOP_APP_BAR_HEIGHT } from '@/components/ui/TopAppBar';
+import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { useTrackingStore } from '@/store/trackingStore';
-import { formatLocalDayHeading, formatLocalTime, localDayKey } from '@/utils/date';
+import {
+  formatLocalDayHeading,
+  formatLocalTime,
+  localDayKey,
+  startOfLocalDayMs,
+} from '@/utils/date';
+import { colors, radii, shadows, spacing, text } from '@/theme';
 
 type Mode = 'chaos' | 'timeline';
 
 type TimelineItem =
-  | {
-      kind: 'emotion';
-      id: string;
-      timestamp: number;
-      title: string;
-      subtitle: string;
-    }
-  | {
-      kind: 'selfRespect';
-      id: string;
-      timestamp: number;
-      title: string;
-      subtitle: string;
-    };
+  | { kind: 'emotion'; id: string; timestamp: number; content: string; isGif: boolean }
+  | { kind: 'selfRespect'; id: string; timestamp: number; description: string };
 
 type TimelineSection = {
-  key: string; // YYYY-MM-DD
+  key: string;
   title: string;
+  isToday: boolean;
   data: TimelineItem[];
 };
 
 const CONTENT_SIZE = 4500;
 const ORIGIN = CONTENT_SIZE / 2;
-const BUBBLE = 82;
+const BUBBLE = 110;
 
 export default function MyProgressScreen() {
-  const scheme = useColorScheme();
-  const isDark = scheme === 'dark';
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<Mode>('chaos');
 
   const emotionLogs = useTrackingStore((s) => s.emotionLogs);
@@ -50,61 +55,34 @@ export default function MyProgressScreen() {
 
   const sections = useMemo<TimelineSection[]>(() => {
     const map = new Map<string, TimelineItem[]>();
+    const todayKey = localDayKey(startOfLocalDayMs(Date.now()));
 
     for (const e of emotionLogs) {
       const key = localDayKey(e.timestamp);
       const list = map.get(key) ?? [];
-      list.push({
-        kind: 'emotion',
-        id: e.id,
-        timestamp: e.timestamp,
-        title: e.type === 'emoji' ? 'Emotion (emoji)' : e.type === 'media_uri' ? 'Emotion (media)' : 'Emotion',
-        subtitle: e.content,
-      });
+      list.push({ kind: 'emotion', id: e.id, timestamp: e.timestamp, content: e.content, isGif: e.type === 'media_uri' });
       map.set(key, list);
     }
-
     for (const s of selfRespectLogs) {
       const key = localDayKey(s.timestamp);
       const list = map.get(key) ?? [];
-      list.push({
-        kind: 'selfRespect',
-        id: s.id,
-        timestamp: s.timestamp,
-        title: 'Self‑respect',
-        subtitle: s.description,
-      });
+      list.push({ kind: 'selfRespect', id: s.id, timestamp: s.timestamp, description: s.description });
       map.set(key, list);
     }
 
-    // Sort sections newest-first; list will be inverted so newest appears at bottom.
+    // Newest day first; within a day, newest entry first.
     const keys = Array.from(map.keys()).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
     return keys.map((key) => {
       const items = (map.get(key) ?? []).slice().sort((a, b) => b.timestamp - a.timestamp);
       const dayMs = new Date(key + 'T00:00:00').getTime();
-      return { key, title: formatLocalDayHeading(dayMs), data: items };
+      return { key, title: formatLocalDayHeading(dayMs), isToday: key === todayKey, data: items };
     });
   }, [emotionLogs, selfRespectLogs]);
 
+  const screenTopPad = insets.top + TOP_APP_BAR_HEIGHT + spacing.md;
+
   return (
-    <View style={[styles.screen, { backgroundColor: isDark ? '#000' : '#fff' }]}>
-      <View style={styles.topBar}>
-        <Text style={[styles.title, { color: isDark ? '#fff' : '#000' }]}>My Progress</Text>
-
-        <View style={styles.segment}>
-          <SegmentButton
-            active={mode === 'chaos'}
-            label="Chaos Blob"
-            onPress={() => setMode('chaos')}
-          />
-          <SegmentButton
-            active={mode === 'timeline'}
-            label="Timeline"
-            onPress={() => setMode('timeline')}
-          />
-        </View>
-      </View>
-
+    <View style={styles.screen}>
       {mode === 'chaos' ? (
         <InfiniteCanvas
           contentSize={CONTENT_SIZE}
@@ -112,11 +90,14 @@ export default function MyProgressScreen() {
           maxScale={3}
           enableDoubleTapReset
           trackedPoints={chaosTrackedPoints}
+          recenterTopOffset={130}
         >
           {emotionLogs.length === 0 ? (
-            <View style={[styles.emptyHint, { left: ORIGIN - 150, top: ORIGIN - 32 }]}>
-              <Text style={styles.emptyHintTitle}>No emotions logged yet</Text>
-              <Text style={styles.emptyHintSubtitle}>Start in “This Day” → Emotion Canvas.</Text>
+            <View style={[styles.chaosEmpty, { left: ORIGIN - 160, top: ORIGIN - 60 }]}>
+              <Text style={styles.chaosEmptyTitle}>The cluster grows here</Text>
+              <Text style={styles.chaosEmptyBody}>
+                As you log feelings on This Day, they’ll drift in and form your chaos blob.
+              </Text>
             </View>
           ) : (
             emotionLogs.map((e, idx) => (
@@ -125,57 +106,171 @@ export default function MyProgressScreen() {
                 delayMs={(idx % 14) * 18}
                 left={ORIGIN + e.xPos - BUBBLE / 2}
                 top={ORIGIN + e.yPos - BUBBLE / 2}
-                text={e.content}
+                text={e.type === 'media_uri' ? null : e.content}
+                gifUrl={e.type === 'media_uri' ? e.content : undefined}
               />
             ))
           )}
         </InfiniteCanvas>
       ) : (
-        <SectionList
-          sections={sections}
-          inverted
-          stickySectionHeadersEnabled={false}
-          keyExtractor={(item) => `${item.kind}:${item.id}`}
-          contentContainerStyle={styles.timelineContent}
-          renderItem={({ item }) => <TimelineRow item={item} />}
-          renderSectionFooter={({ section }) => (
-            <View style={[styles.sectionHeaderWrap, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.08)' }]}>
-              <Text style={[styles.sectionHeaderText, { color: isDark ? 'rgba(255,255,255,0.78)' : 'rgba(0,0,0,0.7)' }]}>
-                {section.title}
+        <ScrollView
+          contentContainerStyle={[
+            styles.timelineContent,
+            { paddingTop: screenTopPad + 70, paddingBottom: 140 + insets.bottom },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {sections.length === 0 ? (
+            <View style={styles.timelineEmpty}>
+              <Text style={styles.timelineEmptyTitle}>No history yet</Text>
+              <Text style={styles.timelineEmptySub}>
+                Your emotions and self‑respect wins will appear here, gathered by day.
               </Text>
+            </View>
+          ) : (
+            <View style={styles.timelineWrap}>
+              <LinearGradient
+                colors={[colors.primaryFixed, 'rgba(203, 196, 210, 0.3)', 'transparent']}
+                locations={[0, 0.6, 1]}
+                style={styles.timelineLine}
+              />
+              {sections.map((section, sIdx) => (
+                <View key={section.key} style={[styles.section, !section.isToday && styles.sectionDim]}>
+                  <DateHeader title={section.title} active={section.isToday} />
+                  <View style={styles.sectionBody}>
+                    {section.data.map((item) => (
+                      <TimelineRow key={`${item.kind}:${item.id}`} item={item} />
+                    ))}
+                  </View>
+                  {sIdx < sections.length - 1 ? <View style={{ height: spacing.lg }} /> : null}
+                </View>
+              ))}
             </View>
           )}
-          ListEmptyComponent={
-            <View style={styles.timelineEmpty}>
-              <Text style={[styles.timelineEmptyTitle, { color: isDark ? '#fff' : '#000' }]}>No history yet</Text>
-              <Text style={[styles.timelineEmptySub, { color: isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)' }]}>
-                Your emotions and self‑respect wins will appear here.
-              </Text>
-            </View>
-          }
-        />
+        </ScrollView>
       )}
+
+      <TopAppBar
+        title="The Canvas"
+        onLeftPress={() => router.push('/(tabs)/this-day')}
+        onRightPress={() => router.push('/profile')}
+      />
+
+      <View style={[styles.toggleFloat, { top: insets.top + TOP_APP_BAR_HEIGHT + spacing.sm }]} pointerEvents="box-none">
+        <View style={styles.toggleInner}>
+          <SegmentedControl<Mode>
+            value={mode}
+            options={[
+              { value: 'chaos', label: 'Chaos Blob' },
+              { value: 'timeline', label: 'Timeline' },
+            ]}
+            onChange={setMode}
+          />
+        </View>
+      </View>
     </View>
   );
 }
 
-function SegmentButton({ active, label, onPress }: { active: boolean; label: string; onPress: () => void }) {
+function DateHeader({ title, active }: { title: string; active: boolean }) {
   return (
-    <Pressable onPress={onPress} style={[styles.segmentBtn, active && styles.segmentBtnActive]}>
-      <Text style={[styles.segmentBtnText, active && styles.segmentBtnTextActive]}>{label}</Text>
-    </Pressable>
+    <View style={styles.dateHeaderRow}>
+      <View style={[styles.dateDot, !active && styles.dateDotDim]} />
+      <Text style={[styles.dateHeaderText, !active && styles.dateHeaderTextDim]}>{title}</Text>
+    </View>
+  );
+}
+
+function TimelineRow({ item }: { item: TimelineItem }) {
+  if (item.kind === 'selfRespect') {
+    return (
+      <View style={styles.rowWrap}>
+        <View style={[styles.rowDot, styles.rowDotGold]} />
+        <BoundaryCard description={item.description} timestamp={item.timestamp} />
+      </View>
+    );
+  }
+  return (
+    <View style={styles.rowWrap}>
+      <View style={styles.rowDot} />
+      <EmotionPill content={item.content} timestamp={item.timestamp} isGif={item.isGif} />
+    </View>
+  );
+}
+
+function BoundaryCard({ description, timestamp }: { description: string; timestamp: number }) {
+  return (
+    <View style={styles.boundaryCard}>
+      <View style={styles.boundaryDecorBlob} />
+      <View style={styles.boundaryHeader}>
+        <View style={styles.boundaryIconWrap}>
+          <MaterialIcons name="shield" size={20} color={colors.onTertiaryFixed} />
+        </View>
+        <View style={styles.boundaryHeaderText}>
+          <Text style={styles.boundaryOverline}>Boundary Established</Text>
+          <Text style={styles.boundaryDescription} numberOfLines={6}>
+            {description}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.boundaryTime}>{formatLocalTime(timestamp)}</Text>
+    </View>
+  );
+}
+
+function EmotionPill({ content, timestamp, isGif }: { content: string; timestamp: number; isGif: boolean }) {
+  if (isGif && content) {
+    return (
+      <View style={styles.timelineGifWrap}>
+        <Image
+          source={{ uri: content }}
+          style={styles.timelineGif}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
+        <Text style={styles.emotionTime}>{formatLocalTime(timestamp)}</Text>
+      </View>
+    );
+  }
+
+  const isLong = content.length > 90;
+  if (isLong) {
+    return (
+      <View style={styles.organicCard}>
+        <View style={styles.organicShape}>
+          <MaterialIcons name="cloud" size={22} color={colors.onSurfaceVariant} />
+        </View>
+        <View style={styles.organicBody}>
+          <Text style={styles.organicQuote}>“{content}”</Text>
+          <Text style={styles.organicMeta}>{formatLocalTime(timestamp)} • Journal entry</Text>
+        </View>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.emotionRow}>
+      <View style={styles.emotionPill}>
+        <View style={styles.emotionPillDot} />
+        <Text numberOfLines={2} style={styles.emotionPillText}>
+          {content}
+        </Text>
+      </View>
+      <Text style={styles.emotionTime}>{formatLocalTime(timestamp)}</Text>
+    </View>
   );
 }
 
 function ChaosBubble({
   left,
   top,
-  text,
+  text: bubbleText,
+  gifUrl,
   delayMs,
 }: {
   left: number;
   top: number;
-  text: string;
+  text: string | null;
+  gifUrl?: string;
   delayMs: number;
 }) {
   const s = useSharedValue(0.92);
@@ -190,216 +285,322 @@ function ChaosBubble({
     transform: [{ translateY: y.value }, { scale: s.value }],
   }));
 
+  if (gifUrl) {
+    return (
+      <Animated.View style={[styles.chaosGifBubble, { left, top }, anim]}>
+        <Image source={{ uri: gifUrl }} style={styles.chaosGifImage} contentFit="cover" cachePolicy="memory-disk" />
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View style={[styles.chaosBubble, { left, top }, anim]}>
-      <Text numberOfLines={2} style={styles.chaosBubbleText}>
-        {text}
+      <Text numberOfLines={3} style={styles.chaosBubbleText}>
+        {bubbleText}
       </Text>
     </Animated.View>
-  );
-}
-
-function TimelineRow({ item }: { item: TimelineItem }) {
-  const isDark = useColorScheme() === 'dark';
-  return (
-    <View
-      style={[
-        styles.row,
-        item.kind === 'selfRespect' ? styles.rowRespect : styles.rowEmotion,
-        isDark && styles.rowDark,
-        isDark && item.kind === 'selfRespect' && styles.rowRespectDark,
-      ]}
-    >
-      <View style={styles.rowIcon}>
-        <Ionicons
-          name={item.kind === 'selfRespect' ? 'shield-checkmark' : 'heart'}
-          size={16}
-          color={item.kind === 'selfRespect' ? (isDark ? '#1B1200' : '#1B1200') : '#fff'}
-        />
-      </View>
-      <View style={styles.rowBody}>
-        <Text style={[styles.rowTitle, { color: isDark ? '#fff' : '#0B0B0C' }]}>{item.title}</Text>
-        <Text
-          numberOfLines={3}
-          style={[styles.rowSubtitle, { color: isDark ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.65)' }]}
-        >
-          {item.subtitle}
-        </Text>
-      </View>
-      <Text style={[styles.rowTime, { color: isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)' }]}>
-        {formatLocalTime(item.timestamp)}
-      </Text>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    backgroundColor: colors.surface,
   },
-  topBar: {
-    paddingTop: 18,
-    paddingHorizontal: 16,
-    paddingBottom: 10,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.3,
-  },
-  segment: {
-    marginTop: 12,
-    flexDirection: 'row',
-    padding: 4,
-    borderRadius: 12,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-  },
-  segmentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
+  // ---- Floating Chaos/Timeline toggle ----
+  toggleFloat: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    justifyContent: 'center',
+    zIndex: 40,
   },
-  segmentBtnActive: {
-    backgroundColor: '#fff',
-    shadowColor: '#000',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  toggleInner: {
+    width: 280,
   },
-  segmentBtnText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: 'rgba(0,0,0,0.6)',
+  // ---- Chaos empty state ----
+  chaosEmpty: {
+    position: 'absolute',
+    width: 320,
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    backgroundColor: 'rgba(253, 247, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
   },
-  segmentBtnTextActive: {
-    color: '#0B0B0C',
+  chaosEmptyTitle: {
+    ...text.h3,
+    fontSize: 18,
+    color: colors.primary,
+  },
+  chaosEmptyBody: {
+    ...text.bodyMd,
+    marginTop: spacing.xs,
+    color: colors.onSurfaceVariant,
   },
   chaosBubble: {
     position: 'absolute',
     width: BUBBLE,
-    height: BUBBLE,
-    borderRadius: BUBBLE / 2,
-    backgroundColor: '#2D2AFA',
+    minHeight: 60,
+    borderRadius: radii.xxl,
+    borderBottomLeftRadius: radii.md,
+    backgroundColor: colors.primaryFixed,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderColor: 'rgba(255,255,255,0.5)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.unit,
     justifyContent: 'center',
+    ...shadows.raisedSm,
+  },
+  chaosGifBubble: {
+    position: 'absolute',
+    width: BUBBLE,
+    height: 80,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    ...shadows.raisedSm,
+  },
+  chaosGifImage: {
+    width: BUBBLE,
+    height: 80,
   },
   chaosBubbleText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '900',
+    ...text.bodyMd,
+    color: colors.onPrimaryFixed,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: 'center',
   },
-  emptyHint: {
-    position: 'absolute',
-    width: 300,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-  },
-  emptyHintTitle: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  emptyHintSubtitle: {
-    marginTop: 4,
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+  // ---- Timeline list ----
   timelineContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: spacing.gutter,
   },
-  sectionHeaderWrap: {
-    marginTop: 14,
-    marginBottom: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+  timelineWrap: {
+    position: 'relative',
+    paddingLeft: 32,
+    paddingRight: 4,
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 24,
+    top: 6,
+    bottom: 24,
+    width: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.08)',
   },
-  sectionHeaderText: {
-    color: 'rgba(0,0,0,0.7)',
-    fontSize: 12,
-    fontWeight: '900',
+  section: {
+    marginBottom: spacing.gutter,
   },
-  row: {
+  sectionDim: {
+    opacity: 0.7,
+  },
+  dateHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    marginLeft: 4,
+  },
+  dateDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 4,
+    borderColor: colors.primaryFixedDim,
+    marginLeft: -16,
+    marginRight: spacing.md,
+  },
+  dateDotDim: {
+    borderColor: colors.outlineVariant,
+  },
+  dateHeaderText: {
+    ...text.h2,
+    fontSize: 24,
+    color: colors.onSurface,
+  },
+  dateHeaderTextDim: {
+    color: colors.onSurfaceVariant,
+  },
+  sectionBody: {
+    gap: spacing.sm,
+    marginLeft: 4,
+  },
+  rowWrap: {
+    position: 'relative',
+    paddingLeft: spacing.sm,
+  },
+  rowDot: {
+    position: 'absolute',
+    left: -14,
+    top: 16,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primaryFixedDim,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    zIndex: 2,
+  },
+  rowDotGold: {
+    backgroundColor: colors.tertiaryFixedDim,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    left: -15,
+    top: 18,
+  },
+  // ---- Boundary (gold) card ----
+  boundaryCard: {
+    backgroundColor: colors.tertiaryFixed,
+    borderRadius: radii.xl,
+    padding: spacing.md,
+    overflow: 'hidden',
+    ...shadows.raisedSm,
+  },
+  boundaryDecorBlob: {
+    position: 'absolute',
+    right: -30,
+    top: -30,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: colors.tertiaryFixedDim,
+    opacity: 0.45,
+  },
+  boundaryHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.08)',
-    backgroundColor: '#fff',
-    marginBottom: 10,
+    gap: spacing.sm,
   },
-  rowEmotion: {},
-  rowRespect: {
-    backgroundColor: '#F3E2A6',
-  },
-  rowDark: {
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderColor: 'rgba(255,255,255,0.10)',
-  },
-  rowRespectDark: {
-    backgroundColor: '#C9A227',
-    borderColor: 'rgba(255,255,255,0.18)',
-  },
-  rowIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+  boundaryIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(253, 247, 255, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  rowBody: {
+  boundaryHeaderText: {
     flex: 1,
   },
-  rowTitle: {
-    color: '#0B0B0C',
-    fontSize: 13,
-    fontWeight: '900',
+  boundaryOverline: {
+    ...text.labelOverline,
+    color: colors.onTertiaryFixed,
+    opacity: 0.75,
+    marginBottom: 4,
   },
-  rowSubtitle: {
-    marginTop: 2,
-    color: 'rgba(0,0,0,0.65)',
-    fontSize: 13,
-    fontWeight: '700',
+  boundaryDescription: {
+    ...text.bodyMd,
+    color: colors.onTertiaryFixed,
+    fontSize: 16,
+    lineHeight: 22,
   },
-  rowTime: {
-    color: 'rgba(0,0,0,0.55)',
-    fontSize: 11,
-    fontWeight: '900',
-    marginLeft: 6,
-    marginTop: 2,
+  boundaryTime: {
+    ...text.labelSm,
+    color: colors.onTertiaryFixed,
+    opacity: 0.7,
+    marginTop: spacing.unit,
+    marginLeft: 48,
   },
+  // ---- Emotion pill row ----
+  emotionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.unit,
+    flexWrap: 'wrap',
+    paddingVertical: 4,
+  },
+  emotionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.unit,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radii.full,
+    backgroundColor: colors.primaryFixed,
+    maxWidth: '88%',
+    ...shadows.raisedSm,
+  },
+  emotionPillDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  emotionPillText: {
+    ...text.bodyMd,
+    color: colors.onPrimaryFixed,
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    flexShrink: 1,
+  },
+  emotionTime: {
+    ...text.labelSm,
+    color: colors.outline,
+    fontSize: 12,
+  },
+  // ---- Timeline GIF entry ----
+  timelineGifWrap: {
+    gap: spacing.unit,
+  },
+  timelineGif: {
+    width: '100%',
+    height: 140,
+    borderRadius: radii.lg,
+    ...shadows.raisedSm,
+  },
+  // ---- Organic emotion (long content) card ----
+  organicCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radii.xl,
+    borderWidth: 1,
+    borderColor: colors.surfaceVariant,
+    padding: spacing.md,
+    ...shadows.raisedSm,
+  },
+  organicShape: {
+    width: 56,
+    height: 56,
+    borderRadius: 22,
+    backgroundColor: colors.errorContainer,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-6deg' }],
+  },
+  organicBody: {
+    flex: 1,
+  },
+  organicQuote: {
+    ...text.bodyLg,
+    fontFamily: 'Inter_400Regular',
+    fontStyle: 'italic',
+    fontSize: 16,
+    lineHeight: 22,
+    color: colors.onSurface,
+  },
+  organicMeta: {
+    ...text.labelSm,
+    color: colors.outline,
+    marginTop: spacing.unit,
+  },
+  // ---- Timeline empty state ----
   timelineEmpty: {
     paddingTop: 40,
     alignItems: 'center',
   },
   timelineEmptyTitle: {
-    fontSize: 18,
-    fontWeight: '900',
+    ...text.h2,
+    fontSize: 22,
+    color: colors.onSurface,
   },
   timelineEmptySub: {
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: '700',
+    ...text.bodyMd,
+    marginTop: spacing.sm,
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: spacing.md,
   },
 });
-

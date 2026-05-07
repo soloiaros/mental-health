@@ -14,8 +14,10 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { colors, radii, shadows, spacing, text as textStyles } from '@/theme';
 
 type Size = { width: number; height: number };
 type Point = { x: number; y: number };
@@ -44,6 +46,11 @@ export type InfiniteCanvasProps = PropsWithChildren<{
    * Screen-space padding (px) used when fitting tracked points on recenter.
    */
   recenterPadding?: number;
+  /**
+   * Extra top offset (px) for the Recenter pill, on top of the safe-area
+   * top inset. Useful to clear a top app bar / floating segmented control.
+   */
+  recenterTopOffset?: number;
 }>;
 
 /** iOS-style rubber-band: smoothly resists going past [min, max], asymptote at ±range. */
@@ -68,6 +75,7 @@ export function InfiniteCanvas({
   enableDoubleTapReset = true,
   trackedPoints,
   recenterPadding = 80,
+  recenterTopOffset = 70,
 }: InfiniteCanvasProps) {
   const insets = useSafeAreaInsets();
   const [viewport, setViewport] = useState<Size>({ width: 0, height: 0 });
@@ -342,7 +350,7 @@ export function InfiniteCanvas({
 
       <Animated.View
         pointerEvents={showRecenter ? 'box-none' : 'none'}
-        style={[styles.recenterContainer, { top: insets.top + 10 }, recenterAnimStyle]}
+        style={[styles.recenterContainer, { top: insets.top + recenterTopOffset }, recenterAnimStyle]}
       >
         <GestureDetector gesture={recenterTap}>
           <Animated.View
@@ -351,7 +359,7 @@ export function InfiniteCanvas({
             accessibilityLabel="Recenter all entries"
             style={styles.recenterPill}
           >
-            <Ionicons name="locate" size={14} color="#0B0B0C" />
+            <MaterialIcons name="my-location" size={14} color={colors.primary} />
             <Text style={styles.recenterText}>Recenter</Text>
           </Animated.View>
         </GestureDetector>
@@ -364,34 +372,34 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     overflow: 'hidden',
+    backgroundColor: colors.surface,
   },
   content: {
-    backgroundColor: '#0B0B0C',
+    backgroundColor: colors.surface,
   },
   recenterContainer: {
     position: 'absolute',
     left: 0,
     right: 0,
     alignItems: 'center',
+    zIndex: 60,
   },
   recenterPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.unit,
+    borderRadius: radii.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.surfaceVariant,
+    ...shadows.pop,
   },
   recenterText: {
-    color: '#0B0B0C',
+    ...textStyles.labelSm,
+    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 0.2,
   },
 });
