@@ -1,6 +1,6 @@
 import React, { forwardRef, useCallback, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { BottomSheetBackdrop, BottomSheetModal } from '@gorhom/bottom-sheet';
+import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 
 import type { EmotionLogType } from '@/store/trackingStore';
 
@@ -25,7 +25,7 @@ export const LogEntrySheet = forwardRef<
     lockedMode?: 'emotion' | 'selfRespect';
   }
 >(function LogEntrySheet({ onSubmit, initialMode = 'emotion', lockedMode }, ref) {
-  const snapPoints = useMemo(() => ['45%', '75%'], []);
+  const snapPoints = useMemo(() => ['50%', '80%'], []);
   const [mode, setMode] = useState<'emotion' | 'selfRespect'>(initialMode);
   const [emotionType, setEmotionType] = useState<EmotionLogType>('text');
   const [emotionContent, setEmotionContent] = useState('');
@@ -72,8 +72,13 @@ export const LogEntrySheet = forwardRef<
     effectiveMode === 'emotion' ? emotionContent.trim().length === 0 : respectDescription.trim().length === 0;
 
   return (
-    <BottomSheetModal ref={modalRef} snapPoints={snapPoints} backdropComponent={renderBackdrop}>
-      <View style={styles.container}>
+    <BottomSheetModal
+      ref={modalRef}
+      snapPoints={snapPoints}
+      backdropComponent={renderBackdrop}
+      enableDynamicSizing={false}
+    >
+      <BottomSheetView style={styles.container}>
         <Text style={styles.title}>Log something</Text>
 
         {!lockedMode ? (
@@ -132,7 +137,7 @@ export const LogEntrySheet = forwardRef<
         >
           <Text style={styles.primaryButtonText}>Add to canvas</Text>
         </Pressable>
-      </View>
+      </BottomSheetView>
     </BottomSheetModal>
   );
 });
@@ -155,6 +160,7 @@ function Pill({ active, label, onPress }: { active: boolean; label: string; onPr
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 20,
@@ -255,4 +261,5 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 });
+
 

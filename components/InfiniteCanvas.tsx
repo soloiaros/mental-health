@@ -71,6 +71,8 @@ export function InfiniteCanvas({
     const pan = Gesture.Pan()
       // Prevent the pan gesture from stealing simple taps (e.g., the FAB overlay).
       .minDistance(8)
+      // Critical: allow taps/presses to be handled by overlay UI.
+      .cancelsTouchesInView(false)
       .onBegin(() => {
         panStartX.value = translateX.value;
         panStartY.value = translateY.value;
@@ -81,6 +83,7 @@ export function InfiniteCanvas({
       });
 
     const pinch = Gesture.Pinch()
+      .cancelsTouchesInView(false)
       .onBegin(() => {
         pinchStartScale.value = scale.value;
       })
@@ -105,6 +108,7 @@ export function InfiniteCanvas({
     const doubleTap = Gesture.Tap()
       .numberOfTaps(2)
       .maxDuration(250)
+      .cancelsTouchesInView(false)
       .onEnd(() => {
         if (!enableDoubleTapReset) return;
         const vp = viewport;

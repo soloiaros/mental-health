@@ -93,7 +93,7 @@ export default function ThisDayCanvasScreen() {
   }, [shouldAutoOpen]);
 
   return (
-    <View style={[styles.screen, { backgroundColor: isDark ? '#000' : '#fff' }]} pointerEvents="box-none">
+    <View style={[styles.screen, { backgroundColor: isDark ? '#000' : '#fff' }]}>
       <InfiniteCanvas contentSize={CONTENT_SIZE} minScale={0.5} maxScale={3}>
         {entryMode === 'emotion'
           ? emotionLogs.map((l) => (
@@ -157,9 +157,10 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: 'absolute',
-    right: 16,
-    bottom: 18,
-    zIndex: 50,
+    right: 20,
+    bottom: 110,
+    zIndex: 999,
+    elevation: 8,
   },
   emotionBubble: {
     position: 'absolute',
@@ -217,4 +218,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+
 

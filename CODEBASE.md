@@ -56,5 +56,6 @@ Within `This Day`:
 - **`components/Fab.tsx`**: Floating action button used to open the log sheet.
 - **`utils/random.ts`**: Random spawn point helpers (logs appear near center).
 - **`utils/id.ts`**: ID generator (UUID when available, fallback otherwise).
+- **`utils/date.ts`**: Local-day grouping + formatting helpers for Timeline (Phase 4).
 - **`babel.config.js`**: Enables `react-native-reanimated/plugin` (required for stable Reanimated behavior).
 
