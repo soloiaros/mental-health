@@ -3,6 +3,7 @@ import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
+  BottomSheetScrollView,
   BottomSheetView,
 } from '@gorhom/bottom-sheet';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -12,7 +13,7 @@ import type { EmotionLogType } from '@/store/trackingStore';
 import { colors, radii, shadows, spacing, text } from '@/theme';
 import { SegmentedControl } from '@/components/ui/SegmentedControl';
 import { TouchableTap } from '@/components/ui/TouchableTap';
-import { GiphyPicker, type GiphyPickerHandle } from '@/components/GiphyPicker';
+import { GiphyPicker } from '@/components/GiphyPicker';
 import type { GiphyGif } from '@/services/giphyApi';
 
 export type LogEntrySheetHandle = {
@@ -33,7 +34,6 @@ export const LogEntrySheet = forwardRef<
     initialMode?: Mode;
   }
 >(function LogEntrySheet({ onSubmit, initialMode = 'emotion' }, ref) {
-  const snapPoints = useMemo(() => ['62%', '92%'], []);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [emotionType, setEmotionType] = useState<EmotionLogType>('text');
   const [emotionContent, setEmotionContent] = useState('');
@@ -41,12 +41,20 @@ export const LogEntrySheet = forwardRef<
   const [respectDescription, setRespectDescription] = useState('');
 
   const modalRef = useRef<BottomSheetModal>(null);
-  const pickerRef = useRef<GiphyPickerHandle>(null);
+
+  // Snap indices:
+  //   0 → 60 %  (text / emoji / selected-gif view)
+  //   1 → 96 %  (gif search + grid)
+  const snapPoints = useMemo(() => ['60%', '96%'], []);
 
   React.useImperativeHandle(
     ref,
     () => ({
-      open: () => modalRef.current?.present(),
+      open: () => {
+        modalRef.current?.present();
+        // Always start at the compact snap point.
+        modalRef.current?.snapToIndex(0);
+      },
       close: () => modalRef.current?.dismiss(),
     }),
     []
@@ -64,18 +72,29 @@ export const LogEntrySheet = forwardRef<
     setSelectedGif(null);
     setRespectDescription('');
     setEmotionType('text');
+    setMode('emotion');
+  }, []);
+
+  // Switch to GIF mode: expand the sheet so the grid has room.
+  const enterGifMode = useCallback(() => {
+    setEmotionType('media_uri');
+    setSelectedGif(null);
+    setEmotionContent('');
+    requestAnimationFrame(() => {
+      modalRef.current?.snapToIndex(1);
+    });
   }, []);
 
   const handleGifSelect = useCallback((gif: GiphyGif) => {
     setSelectedGif(gif);
-    // The content we store is the display URL so it can be rendered.
     setEmotionContent(gif.displayUrl);
+    // Collapse back to the compact view now that a GIF is chosen.
+    modalRef.current?.snapToIndex(0);
   }, []);
 
-  const openGiphyPicker = useCallback(() => {
-    setEmotionType('media_uri');
-    // Small delay so the type-switch animation plays before the picker opens.
-    setTimeout(() => pickerRef.current?.open(), 120);
+  const clearGif = useCallback(() => {
+    setSelectedGif(null);
+    setEmotionContent('');
   }, []);
 
   const submit = useCallback(() => {
@@ -96,6 +115,8 @@ export const LogEntrySheet = forwardRef<
 
   const isEmotion = mode === 'emotion';
   const isGif = emotionType === 'media_uri';
+  // Show the full-height gif search pane when gif mode is on and nothing is picked yet.
+  const showGifSearch = isEmotion && isGif && selectedGif === null;
 
   const submitDisabled = isEmotion
     ? isGif
@@ -103,115 +124,118 @@ export const LogEntrySheet = forwardRef<
       : emotionContent.trim().length === 0
     : respectDescription.trim().length === 0;
 
-  return (
+  // ------------------------------------------------------------------
+  // When gif search pane is open we need a scrollable container so the
+  // grid can extend beyond the sheet height. Switch to BottomSheetScrollView.
+  // ------------------------------------------------------------------
+  const sharedHeader = (
     <>
-      <BottomSheetModal
-        ref={modalRef}
-        snapPoints={snapPoints}
-        backdropComponent={renderBackdrop}
-        enableDynamicSizing={false}
-        handleStyle={styles.handleStyle}
-        handleIndicatorStyle={styles.handleIndicator}
-        backgroundStyle={styles.background}
-        onDismiss={reset}
-      >
-        <BottomSheetView style={styles.container}>
-          <Text style={styles.title}>
-            {isEmotion ? 'How are you feeling right now?' : 'What boundary did you honor?'}
-          </Text>
+      <Text style={styles.title}>
+        {isEmotion ? 'How are you feeling right now?' : 'What boundary did you honor?'}
+      </Text>
 
-          {/* Input area — text/emoji TextInput or GIF picker surface */}
-          {isEmotion && isGif ? (
-            <GifInputArea
-              selected={selectedGif}
-              onPickPress={() => pickerRef.current?.open()}
-              onClear={() => {
-                setSelectedGif(null);
-                setEmotionContent('');
-              }}
-            />
-          ) : (
-            <View style={styles.inputWrap}>
-              {isEmotion ? (
-                <TextInput
-                  value={emotionContent}
-                  onChangeText={setEmotionContent}
-                  placeholder={
-                    emotionType === 'emoji'
-                      ? 'Type or paste an emoji…'
-                      : 'Write what surfaces…'
-                  }
-                  placeholderTextColor={colors.outline}
-                  style={styles.input}
-                  multiline
-                  autoCorrect
-                  maxLength={500}
-                />
-              ) : (
-                <TextInput
-                  value={respectDescription}
-                  onChangeText={setRespectDescription}
-                  placeholder="Example: I declined an extra project to protect my evening."
-                  placeholderTextColor={colors.outline}
-                  style={styles.input}
-                  multiline
-                  autoCorrect
-                  maxLength={500}
-                />
-              )}
-            </View>
-          )}
-
-          <View style={styles.toggleRow}>
-            <Text style={styles.toggleLabel}>Categorize entry</Text>
-            <SegmentedControl<Mode>
-              value={mode}
-              options={[
-                { value: 'emotion', label: 'Emotion' },
-                { value: 'selfRespect', label: 'Action' },
-              ]}
-              onChange={setMode}
-              style={styles.toggle}
-            />
-          </View>
-
+      {/* Input area */}
+      {isEmotion && isGif ? (
+        selectedGif ? (
+          <GifPreview gif={selectedGif} onChangePress={enterGifMode} onClear={clearGif} />
+        ) : null /* grid is shown below in scroll mode */
+      ) : (
+        <View style={styles.inputWrap}>
           {isEmotion ? (
-            <View style={styles.bottomBar}>
-              <View style={styles.toolRow}>
-                <ToolButton
-                  icon="edit-note"
-                  accessibilityLabel="Text entry"
-                  active={emotionType === 'text'}
-                  onPress={() => setEmotionType('text')}
-                />
-                <ToolButton
-                  icon="mood"
-                  accessibilityLabel="Emoji entry"
-                  active={emotionType === 'emoji'}
-                  onPress={() => setEmotionType('emoji')}
-                />
-                {/* GIF button opens the Giphy picker directly */}
-                <ToolButton
-                  icon="gif"
-                  accessibilityLabel="Pick a GIF"
-                  active={emotionType === 'media_uri'}
-                  onPress={openGiphyPicker}
-                />
-              </View>
-
-              <SubmitButton onPress={submit} disabled={submitDisabled} />
-            </View>
+            <TextInput
+              value={emotionContent}
+              onChangeText={setEmotionContent}
+              placeholder={emotionType === 'emoji' ? 'Type or paste an emoji…' : 'Write what surfaces…'}
+              placeholderTextColor={colors.outline}
+              style={styles.input}
+              multiline
+              autoCorrect
+              maxLength={500}
+            />
           ) : (
-            <View style={[styles.bottomBar, styles.bottomBarEnd]}>
-              <SubmitButton onPress={submit} disabled={submitDisabled} />
-            </View>
+            <TextInput
+              value={respectDescription}
+              onChangeText={setRespectDescription}
+              placeholder="Example: I declined an extra project to protect my evening."
+              placeholderTextColor={colors.outline}
+              style={styles.input}
+              multiline
+              autoCorrect
+              maxLength={500}
+            />
           )}
-        </BottomSheetView>
-      </BottomSheetModal>
+        </View>
+      )}
 
-      {/* Giphy picker sits as a second stacked modal */}
-      <GiphyPicker ref={pickerRef} onSelect={handleGifSelect} />
+      <View style={styles.toggleRow}>
+        <Text style={styles.toggleLabel}>Categorize entry</Text>
+        <SegmentedControl<Mode>
+          value={mode}
+          options={[
+            { value: 'emotion', label: 'Emotion' },
+            { value: 'selfRespect', label: 'Action' },
+          ]}
+          onChange={(next) => {
+            setMode(next);
+            if (isGif) {
+              // Leave gif mode when switching to action
+              setEmotionType('text');
+              setSelectedGif(null);
+              setEmotionContent('');
+            }
+          }}
+          style={styles.toggle}
+        />
+      </View>
+
+      {isEmotion ? (
+        <View style={styles.bottomBar}>
+          <View style={styles.toolRow}>
+            <ToolButton icon="edit-note" accessibilityLabel="Text" active={emotionType === 'text'} onPress={() => setEmotionType('text')} />
+            <ToolButton icon="mood" accessibilityLabel="Emoji" active={emotionType === 'emoji'} onPress={() => setEmotionType('emoji')} />
+            <ToolButton icon="gif" accessibilityLabel="Pick a GIF" active={isGif} onPress={enterGifMode} />
+          </View>
+          <SubmitButton onPress={submit} disabled={submitDisabled} />
+        </View>
+      ) : (
+        <View style={[styles.bottomBar, styles.bottomBarEnd]}>
+          <SubmitButton onPress={submit} disabled={submitDisabled} />
+        </View>
+      )}
     </>
+  );
+
+  return (
+    <BottomSheetModal
+      ref={modalRef}
+      snapPoints={snapPoints}
+      backdropComponent={renderBackdrop}
+      enableDynamicSizing={false}
+      handleStyle={styles.handleStyle}
+      handleIndicatorStyle={styles.handleIndicator}
+      backgroundStyle={styles.background}
+      onDismiss={reset}
+    >
+      {showGifSearch ? (
+        // Expanded gif-search mode: scrollable so the grid can extend.
+        <BottomSheetScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {sharedHeader}
+
+          {/* GIF label + inline picker */}
+          <Text style={styles.gifPickerLabel}>Pick a GIF</Text>
+          <GiphyPicker onSelect={handleGifSelect} />
+        </BottomSheetScrollView>
+      ) : (
+        // Normal compact mode: fixed layout.
+        <BottomSheetView style={styles.container}>
+          {sharedHeader}
+        </BottomSheetView>
+      )}
+    </BottomSheetModal>
   );
 });
 
@@ -219,41 +243,31 @@ export const LogEntrySheet = forwardRef<
 // Sub-components
 // ---------------------------------------------------------------------------
 
-function GifInputArea({
-  selected,
-  onPickPress,
+function GifPreview({
+  gif,
+  onChangePress,
   onClear,
 }: {
-  selected: GiphyGif | null;
-  onPickPress: () => void;
+  gif: GiphyGif;
+  onChangePress: () => void;
   onClear: () => void;
 }) {
-  if (!selected) {
-    return (
-      <TouchableTap onPress={onPickPress} accessibilityLabel="Open GIF picker" style={styles.gifPlaceholder}>
-        <MaterialIcons name="gif" size={40} color={colors.primary} />
-        <Text style={styles.gifPlaceholderText}>Tap to pick a GIF</Text>
-        <Text style={styles.gifPlaceholderSub}>Browse trending or search Giphy</Text>
-      </TouchableTap>
-    );
-  }
-
-  const previewH = Math.round(160 / (selected.aspectRatio || 1));
+  const previewH = Math.max(100, Math.min(200, Math.round(160 / (gif.aspectRatio || 1))));
 
   return (
     <View style={styles.gifPreviewWrap}>
       <Image
-        source={{ uri: selected.displayUrl }}
-        style={[styles.gifPreview, { height: Math.max(100, Math.min(200, previewH)) }]}
+        source={{ uri: gif.displayUrl }}
+        style={[styles.gifPreview, { height: previewH }]}
         contentFit="cover"
         cachePolicy="memory-disk"
       />
       <View style={styles.gifPreviewActions}>
-        <TouchableTap onPress={onPickPress} accessibilityLabel="Change GIF" style={styles.gifActionBtn}>
+        <TouchableTap onPress={onChangePress} accessibilityLabel="Change GIF" style={styles.gifAction}>
           <MaterialIcons name="refresh" size={16} color={colors.primary} />
           <Text style={styles.gifActionText}>Change</Text>
         </TouchableTap>
-        <TouchableTap onPress={onClear} accessibilityLabel="Remove GIF" style={styles.gifActionBtn}>
+        <TouchableTap onPress={onClear} accessibilityLabel="Remove GIF" style={styles.gifAction}>
           <MaterialIcons name="close" size={16} color={colors.error} />
           <Text style={[styles.gifActionText, { color: colors.error }]}>Remove</Text>
         </TouchableTap>
@@ -275,12 +289,7 @@ function ToolButton({
 }) {
   return (
     <TouchableTap onPress={onPress} accessibilityLabel={accessibilityLabel}>
-      <View
-        style={[
-          styles.toolBtn,
-          active && { backgroundColor: colors.primaryFixed, borderColor: colors.primaryFixedDim },
-        ]}
-      >
+      <View style={[styles.toolBtn, active && styles.toolBtnActive]}>
         <MaterialIcons name={icon} size={20} color={active ? colors.primary : colors.secondary} />
       </View>
     </TouchableTap>
@@ -326,6 +335,7 @@ const styles = StyleSheet.create({
       android: { elevation: 16 },
     }),
   },
+  // Compact (non-gif) mode container
   container: {
     flex: 1,
     paddingHorizontal: spacing.gutter,
@@ -333,12 +343,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     gap: spacing.md,
   },
+  // Scrollable gif-search mode container
+  scrollContent: {
+    paddingHorizontal: spacing.gutter,
+    paddingTop: spacing.unit,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
+  },
   title: {
     ...text.h3,
     fontSize: 22,
     color: colors.onSurface,
   },
-  // -- Text / emoji input --
+  // ---- text / emoji input ----
   inputWrap: {
     backgroundColor: colors.surfaceContainerLow,
     borderRadius: radii.lg,
@@ -356,28 +373,7 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlignVertical: 'top',
   },
-  // -- GIF placeholder --
-  gifPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderColor: colors.primaryFixed,
-    borderStyle: 'dashed',
-    paddingVertical: spacing.md + 8,
-    backgroundColor: colors.surfaceContainerLow,
-    gap: spacing.xs,
-  },
-  gifPlaceholderText: {
-    ...text.bodyMd,
-    color: colors.primary,
-    fontFamily: 'Inter_500Medium',
-  },
-  gifPlaceholderSub: {
-    ...text.labelSm,
-    color: colors.onSurfaceVariant,
-  },
-  // -- GIF preview --
+  // ---- GIF preview (after selection) ----
   gifPreviewWrap: {
     borderRadius: radii.lg,
     overflow: 'hidden',
@@ -386,8 +382,6 @@ const styles = StyleSheet.create({
   },
   gifPreview: {
     width: '100%',
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
   },
   gifPreviewActions: {
     flexDirection: 'row',
@@ -396,7 +390,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.surfaceContainerLow,
   },
-  gifActionBtn: {
+  gifAction: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -407,7 +401,14 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontFamily: 'Inter_500Medium',
   },
-  // -- Mode toggle --
+  // ---- GIF search pane label ----
+  gifPickerLabel: {
+    ...text.labelOverline,
+    color: colors.primary,
+    letterSpacing: 1.2,
+    marginBottom: -spacing.xs,
+  },
+  // ---- Mode / categorize row ----
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -427,12 +428,11 @@ const styles = StyleSheet.create({
   toggle: {
     minWidth: 200,
   },
-  // -- Bottom bar --
+  // ---- Bottom action bar ----
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 'auto',
   },
   bottomBarEnd: {
     justifyContent: 'flex-end',
@@ -452,6 +452,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'transparent',
     ...shadows.raisedSm,
+  },
+  toolBtnActive: {
+    backgroundColor: colors.primaryFixed,
+    borderColor: colors.primaryFixedDim,
   },
   submit: {
     width: 52,

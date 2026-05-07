@@ -1,12 +1,11 @@
-import React, {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+/**
+ * GiphyPicker — inline search + grid component.
+ *
+ * Renders a search bar and a scrollable 2-column GIF grid with no modal
+ * wrapping. Embed it directly inside whatever container you need
+ * (e.g. inside a BottomSheetScrollView when the entry sheet is in GIF mode).
+ */
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +14,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { BottomSheetBackdrop, BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -24,37 +22,22 @@ import { type GiphyGif, fetchTrending, searchGifs } from '@/services/giphyApi';
 import { colors, radii, shadows, spacing, text } from '@/theme';
 import { TouchableTap } from '@/components/ui/TouchableTap';
 
-export type GiphyPickerHandle = {
-  open: () => void;
-  close: () => void;
-};
+export type { GiphyGif };
+
+const COLUMN_GAP = spacing.unit;
 
 type Props = {
   onSelect: (gif: GiphyGif) => void;
 };
 
-const COLUMN_GAP = spacing.unit;
-const GRID_PADDING = spacing.gutter;
-
-export const GiphyPicker = forwardRef<GiphyPickerHandle, Props>(function GiphyPicker(
-  { onSelect },
-  ref
-) {
-  const modalRef = useRef<BottomSheetModal>(null);
-  const snapPoints = useMemo(() => ['70%', '96%'], []);
-
-  useImperativeHandle(ref, () => ({
-    open: () => modalRef.current?.present(),
-    close: () => modalRef.current?.dismiss(),
-  }), []);
-
+export function GiphyPicker({ onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [gifs, setGifs] = useState<GiphyGif[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Debounce the search query by 400 ms.
+  // 400 ms debounce on the search input.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), 400);
     return () => clearTimeout(t);
@@ -82,89 +65,66 @@ export const GiphyPicker = forwardRef<GiphyPickerHandle, Props>(function GiphyPi
     return () => { cancelled = true; };
   }, [debouncedQuery]);
 
-  const handleSelect = useCallback(
-    (gif: GiphyGif) => {
-      onSelect(gif);
-      modalRef.current?.dismiss();
-    },
-    [onSelect]
-  );
+  const noKey =
+    !(GIPHY_API_KEY as string) || (GIPHY_API_KEY as string) === 'YOUR_GIPHY_API_KEY_HERE';
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} opacity={0.5} />
-    ),
-    []
-  );
-
-  const noKey = GIPHY_API_KEY === 'YOUR_GIPHY_API_KEY_HERE' || !GIPHY_API_KEY;
+  if (noKey) {
+    return <ApiKeyWarning />;
+  }
 
   return (
-    <BottomSheetModal
-      ref={modalRef}
-      snapPoints={snapPoints}
-      backdropComponent={renderBackdrop}
-      enableDynamicSizing={false}
-      handleIndicatorStyle={styles.handle}
-      backgroundStyle={styles.background}
-    >
-      <BottomSheetView style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Find a GIF</Text>
-          <Text style={styles.subtitle}>Powered by Giphy</Text>
-        </View>
-
-        {noKey ? (
-          <ApiKeyWarning />
-        ) : (
-          <>
-            <SearchBar value={query} onChange={setQuery} />
-
-            {loading ? (
-              <View style={styles.centred}>
-                <ActivityIndicator size="large" color={colors.primary} />
-              </View>
-            ) : error ? (
-              <View style={styles.centred}>
-                <MaterialIcons name="wifi-off" size={36} color={colors.outline} />
-                <Text style={styles.errorText}>{error}</Text>
-              </View>
-            ) : gifs.length === 0 ? (
-              <View style={styles.centred}>
-                <Text style={styles.emptyText}>{'No GIFs found for "' + debouncedQuery + '"'}</Text>
-              </View>
-            ) : (
-              <GifGrid gifs={gifs} onSelect={handleSelect} />
-            )}
-          </>
+    <View style={styles.root}>
+      {/* Search bar */}
+      <View style={styles.searchWrap}>
+        <MaterialIcons name="search" size={20} color={colors.outline} />
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search feelings, moods, reactions…"
+          placeholderTextColor={colors.outline}
+          returnKeyType="search"
+          autoCorrect={false}
+          autoCapitalize="none"
+          style={styles.searchInput}
+        />
+        {query.length > 0 && (
+          <TouchableTap onPress={() => setQuery('')} accessibilityLabel="Clear search" hitSlop={12}>
+            <MaterialIcons name="close" size={18} color={colors.outline} />
+          </TouchableTap>
         )}
-      </BottomSheetView>
-    </BottomSheetModal>
-  );
-});
+      </View>
 
-function SearchBar({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  return (
-    <View style={styles.searchWrap}>
-      <MaterialIcons name="search" size={20} color={colors.outline} style={styles.searchIcon} />
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="Search feelings, moods, reactions…"
-        placeholderTextColor={colors.outline}
-        returnKeyType="search"
-        autoCorrect={false}
-        autoCapitalize="none"
-        style={styles.searchInput}
-      />
-      {value.length > 0 ? (
-        <TouchableTap onPress={() => onChange('')} accessibilityLabel="Clear search" hitSlop={12}>
-          <MaterialIcons name="close" size={18} color={colors.outline} />
-        </TouchableTap>
-      ) : null}
+      {/* Label */}
+      <Text style={styles.gridLabel}>
+        {debouncedQuery.trim() ? `Results for "${debouncedQuery}"` : 'Trending'}
+      </Text>
+
+      {/* Grid / states */}
+      {loading ? (
+        <View style={styles.centred}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.centred}>
+          <MaterialIcons name="wifi-off" size={36} color={colors.outline} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : gifs.length === 0 ? (
+        <View style={styles.centred}>
+          <Text style={styles.emptyText}>
+            {'No GIFs found for "' + debouncedQuery + '"'}
+          </Text>
+        </View>
+      ) : (
+        <GifGrid gifs={gifs} onSelect={onSelect} />
+      )}
     </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Internal pieces
+// ---------------------------------------------------------------------------
 
 function GifGrid({ gifs, onSelect }: { gifs: GiphyGif[]; onSelect: (g: GiphyGif) => void }) {
   const renderItem = useCallback(
@@ -172,41 +132,40 @@ function GifGrid({ gifs, onSelect }: { gifs: GiphyGif[]; onSelect: (g: GiphyGif)
     [onSelect]
   );
 
-  const keyExtractor = useCallback((item: GiphyGif) => item.id, []);
-
   return (
     <FlatList
       data={gifs}
       renderItem={renderItem}
-      keyExtractor={keyExtractor}
+      keyExtractor={(item) => item.id}
       numColumns={2}
       columnWrapperStyle={styles.row}
       contentContainerStyle={styles.gridContent}
       showsVerticalScrollIndicator={false}
       initialNumToRender={10}
       windowSize={5}
+      // Disable FlatList's own scroll so the parent BottomSheet scrolls.
+      scrollEnabled={false}
     />
   );
 }
 
 function GifTile({ gif, onSelect }: { gif: GiphyGif; onSelect: (g: GiphyGif) => void }) {
-  const tileWidth = 160;
-  const tileHeight = Math.round(tileWidth / (gif.aspectRatio || 1));
+  const tileH = Math.max(80, Math.min(180, Math.round(150 / (gif.aspectRatio || 1))));
 
   return (
     <TouchableTap
       onPress={() => onSelect(gif)}
       accessibilityLabel={gif.title || 'GIF'}
-      style={styles.tile}
-      pressedOpacity={0.7}
+      style={[styles.tile, { height: tileH }]}
+      pressedOpacity={0.65}
       pressedScale={0.96}
     >
       <Image
         source={{ uri: gif.previewUrl }}
-        style={[styles.tileImage, { width: tileWidth, height: Math.max(80, Math.min(200, tileHeight)) }]}
+        style={StyleSheet.absoluteFillObject}
         contentFit="cover"
         cachePolicy="memory-disk"
-        transition={160}
+        transition={150}
       />
     </TouchableTap>
   );
@@ -214,56 +173,31 @@ function GifTile({ gif, onSelect }: { gif: GiphyGif; onSelect: (g: GiphyGif) => 
 
 function ApiKeyWarning() {
   return (
-    <View style={styles.warningCard}>
+    <View style={styles.centred}>
       <MaterialIcons name="vpn-key" size={32} color={colors.tertiary} />
       <Text style={styles.warningTitle}>Giphy API key not set</Text>
       <Text style={styles.warningBody}>
-        Open <Text style={styles.warningCode}>config/giphy.ts</Text> and replace{' '}
-        <Text style={styles.warningCode}>YOUR_GIPHY_API_KEY_HERE</Text> with your key.{'\n\n'}
-        Get a free key at{' '}
-        <Text style={styles.warningCode}>developers.giphy.com</Text>
+        {'Open '}
+        <Text style={styles.warningCode}>config/giphy.ts</Text>
+        {' and replace '}
+        <Text style={styles.warningCode}>YOUR_GIPHY_API_KEY_HERE</Text>
+        {' with your key from developers.giphy.com'}
       </Text>
     </View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
 const styles = StyleSheet.create({
-  handle: {
-    backgroundColor: colors.outlineVariant,
-    width: 44,
-    height: 5,
-    borderRadius: 999,
-  },
-  background: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.xxl,
-    borderTopRightRadius: radii.xxl,
-  },
-  container: {
+  root: {
     flex: 1,
-    paddingTop: spacing.sm,
-  },
-  header: {
-    paddingHorizontal: GRID_PADDING,
-    marginBottom: spacing.sm,
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: spacing.unit,
-  },
-  title: {
-    ...text.h3,
-    fontSize: 20,
-    color: colors.onSurface,
-  },
-  subtitle: {
-    ...text.labelSm,
-    color: colors.outline,
   },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: GRID_PADDING,
-    marginBottom: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.unit,
     backgroundColor: colors.surfaceContainerLow,
@@ -271,9 +205,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.outlineVariant,
     gap: spacing.unit,
-  },
-  searchIcon: {
-    flexShrink: 0,
+    marginBottom: spacing.unit,
   },
   searchInput: {
     flex: 1,
@@ -282,10 +214,14 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     padding: 0,
   },
+  gridLabel: {
+    ...text.labelSm,
+    color: colors.onSurfaceVariant,
+    marginBottom: spacing.unit,
+  },
   gridContent: {
-    paddingHorizontal: GRID_PADDING - COLUMN_GAP / 2,
-    paddingBottom: spacing.xl,
     gap: COLUMN_GAP,
+    paddingBottom: spacing.lg,
   },
   row: {
     gap: COLUMN_GAP,
@@ -297,15 +233,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceContainer,
     ...shadows.raisedSm,
   },
-  tileImage: {
-    borderRadius: radii.md,
-  },
   centred: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingBottom: spacing.xl,
+    paddingVertical: spacing.xl,
   },
   emptyText: {
     ...text.bodyMd,
@@ -317,16 +250,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: spacing.margin,
   },
-  warningCard: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.margin,
-    gap: spacing.sm,
-  },
   warningTitle: {
     ...text.h3,
-    fontSize: 18,
+    fontSize: 17,
     color: colors.onSurface,
     textAlign: 'center',
   },
@@ -335,10 +261,10 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
     textAlign: 'center',
     lineHeight: 22,
+    paddingHorizontal: spacing.md,
   },
   warningCode: {
     fontFamily: 'Inter_500Medium',
     color: colors.primary,
-    backgroundColor: colors.primaryFixed,
   },
 });
