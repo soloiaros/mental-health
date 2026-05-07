@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -42,11 +42,11 @@ export function TopAppBar({
   );
 }
 
+const LOGO = require('@/assets/images/logo.png');
+
 function BrandButton({ onPress }: { onPress?: () => void }) {
   const inner = (
-    <View style={styles.brand}>
-      <MaterialIcons name="spa" size={20} color={colors.primary} />
-    </View>
+    <Image source={LOGO} style={styles.brand} resizeMode="contain" />
   );
   if (!onPress) return inner;
   return (
@@ -96,11 +96,8 @@ const styles = StyleSheet.create({
   brand: {
     width: 40,
     height: 40,
-    borderRadius: radii.full,
-    backgroundColor: colors.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.raisedSm,
+    borderRadius: radii.md,
+    overflow: 'hidden',
   },
   titleWrap: {
     flex: 1,
