@@ -1,50 +1,79 @@
-# Welcome to your Expo app 👋
+# Bubl🫩✌️
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> Your personal space to establish boundaries, reflect, and manage emotional wellbeing.
 
-## Get started
+Welcome to **Bubl**! This is a fun, interactive React Native app built to help you track your emotions and reinforce self-respect in a visual, spatial way. Drop your feelings onto an infinite canvas and watch your progress grow.
 
-1. Install dependencies
+---
+
+## 📸 Screenshots
+
+Here’s a sneak peek of Bubl in action:
+
+<div align="center">
+  <img src="https://via.placeholder.com/200x400?text=Screenshot+1" width="18%" alt="Screenshot 1 Placeholder">
+  <img src="https://via.placeholder.com/200x400?text=Screenshot+2" width="18%" alt="Screenshot 2 Placeholder">
+  <img src="https://via.placeholder.com/200x400?text=Screenshot+3" width="18%" alt="Screenshot 3 Placeholder">
+  <img src="https://via.placeholder.com/200x400?text=Screenshot+4" width="18%" alt="Screenshot 4 Placeholder">
+  <img src="https://via.placeholder.com/200x400?text=Screenshot+5" width="18%" alt="Screenshot 5 Placeholder">
+</div>
+
+---
+
+## ✨ Features
+
+- 🎨 **Emotion Canvas**: An infinite, pan-and-zoom surface where you can plot your emotional state using text, emojis, or media.
+- 🧱 **Self-Respect Wall**: A dedicated space to log boundaries and positive affirmations.
+- ⚡ **Lightning Fast Persistence**: Your logs are saved instantly on-device using `react-native-mmkv` so your data never leaves your phone unless you want it to.
+
+## 🛠️ Tech Stack
+
+Bubl was built as a fun side-project with a powerful, modern stack:
+
+- **Framework**: [React Native](https://reactnative.dev/) & [Expo](https://expo.dev/)
+- **Routing**: Expo Router
+- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
+- **Local Storage**: `react-native-mmkv` (with AsyncStorage fallback for web)
+- **Animations & Gestures**: `react-native-reanimated` & `react-native-gesture-handler`
+- **UI Components**: `@gorhom/bottom-sheet`, custom Glass Surfaces, and Themed elements.
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Node.js installed
+- Expo Go app on your physical device, or an iOS Simulator / Android Emulator running.
+
+### Installation
+
+1. Clone the repository and navigate into it:
+
+   ```bash
+   cd MentalHealth
+   ```
+
+2. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. Start the Expo development server:
 
    ```bash
-   npx expo start
+   npm start
    ```
 
-In the output, you'll find options to open the app in a
+4. Press `i` to open in iOS simulator, `a` for Android, or scan the QR code with your Expo Go app!
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## 📂 Codebase Structure Highlights
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- `app/`: Expo Router screens and tab layouts.
+- `components/`: Reusable UI components including the `InfiniteCanvas` and `LogEntrySheet`.
+- `store/`: Zustand stores for global state and MMKV persistence adapters.
+- `utils/`: Helper functions for ID generation, random spawn points, and date formatting.
+- `assets/`: App icons, splash screens, and images.
 
-## Get a fresh project
+---
 
-When you're ready, run:
-
-```bash
-npm run reset-project
-```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+_Take a deep breath, set your boundaries, and enjoy the Bubl! 🫩✌️_
