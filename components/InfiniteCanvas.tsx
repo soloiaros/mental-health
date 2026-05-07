@@ -134,20 +134,26 @@ export function InfiniteCanvas({
 
       const w = Math.max(1, maxX - minX);
       const h = Math.max(1, maxY - minY);
-      const cx = (minX + maxX) / 2;
+      const cx = (minX + maxX) / 2; // centre of the bounding box in content space
       const cy = (minY + maxY) / 2;
 
       const availW = Math.max(1, vp.width - recenterPadding * 2);
       const availH = Math.max(1, vp.height - recenterPadding * 2);
 
-      // Don't zoom in for tight clusters; cap fit-scale so a single bubble
-      // doesn't fill the whole screen.
+      // Don't zoom in too aggressively for tight clusters or single items.
       const fit = Math.min(availW / w, availH / h);
-      const cap = points.length === 1 ? 1.4 : 1.2;
+      const cap = points.length === 1 ? 1.2 : 1.0;
       const targetScale = Math.max(minScale, Math.min(maxScale, Math.min(fit, cap)));
 
-      const targetTX = vp.width / 2 - cx * targetScale;
-      const targetTY = vp.height / 2 - cy * targetScale;
+      // RN applies the scale transform around the VIEW's centre (contentSize/2),
+      // not the origin. The screen position of content point px is therefore:
+      //   screen_x = contentSize/2 + translateX + (px - contentSize/2) * scale
+      //
+      // Solving for translateX so that screen_x(cx) = vp.width/2:
+      //   targetTX = vp.width/2 - contentSize/2 - (cx - contentSize/2) * targetScale
+      const half = contentSize / 2;
+      const targetTX = vp.width / 2 - half - (cx - half) * targetScale;
+      const targetTY = vp.height / 2 - half - (cy - half) * targetScale;
 
       cancelAnimation(translateX);
       cancelAnimation(translateY);
@@ -159,7 +165,7 @@ export function InfiniteCanvas({
       translateY.value = withTiming(targetTY, { duration, easing });
       scale.value = withTiming(targetScale, { duration, easing });
     },
-    [maxScale, minScale, recenterPadding, scale, translateX, translateY]
+    [contentSize, maxScale, minScale, recenterPadding, scale, translateX, translateY]
   );
 
   const gestures = useMemo(() => {
@@ -288,13 +294,17 @@ export function InfiniteCanvas({
       const tx = translateX.value;
       const ty = translateY.value;
       const sc = scale.value;
-      // Generous margin so we don't pop the pill when an item is right at the edge.
-      const margin = 28;
+      // Half-size of the content surface, needed to account for RN's scale-around-centre.
+      const half = contentSize / 2;
+      // Generous margin so the pill doesn't pop when an item grazes the edge.
+      const margin = 36;
 
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        const sx = tx + p.x * sc;
-        const sy = ty + p.y * sc;
+        // Correct screen position accounting for scale-around-centre:
+        //   screen_x = contentSize/2 + tx + (px - contentSize/2) * scale
+        const sx = half + tx + (p.x - half) * sc;
+        const sy = half + ty + (p.y - half) * sc;
         if (sx >= -margin && sx <= vp.width + margin && sy >= -margin && sy <= vp.height + margin) {
           return false;
         }
@@ -306,7 +316,7 @@ export function InfiniteCanvas({
         runOnJS(setShowRecenter)(allOut as boolean);
       }
     },
-    [trackedPoints, viewport]
+    [trackedPoints, viewport, contentSize]
   );
 
   useEffect(() => {
