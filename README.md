@@ -1,6 +1,10 @@
-# Bubl🫩✌️
+# Bubl
 
 > Your personal space to establish boundaries, reflect, and manage emotional wellbeing.
+
+<div align="center">
+  <img width="25%" height="auto" alt="app logo" src="https://github.com/user-attachments/assets/065bfeae-5288-4fc4-81e9-91ad21aac502" />
+</div>
 
 Welcome to **Bubl**! This is a fun, interactive React Native app built to help you track your emotions and reinforce self-respect in a visual, spatial way. Drop your feelings onto an infinite canvas and watch your progress grow.
 
@@ -11,11 +15,13 @@ Welcome to **Bubl**! This is a fun, interactive React Native app built to help y
 Here’s a sneak peek of Bubl in action:
 
 <div align="center">
-  <img src="https://via.placeholder.com/200x400?text=Screenshot+1" width="18%" alt="Screenshot 1 Placeholder">
-  <img src="https://via.placeholder.com/200x400?text=Screenshot+2" width="18%" alt="Screenshot 2 Placeholder">
-  <img src="https://via.placeholder.com/200x400?text=Screenshot+3" width="18%" alt="Screenshot 3 Placeholder">
-  <img src="https://via.placeholder.com/200x400?text=Screenshot+4" width="18%" alt="Screenshot 4 Placeholder">
-  <img src="https://via.placeholder.com/200x400?text=Screenshot+5" width="18%" alt="Screenshot 5 Placeholder">
+  <img width="18%" height="auto" alt="Simulator Screenshot" src="https://github.com/user-attachments/assets/56d69e76-b3cf-4335-b75c-0770eefe1b70" />
+  <img width="18%" height="auto" alt="Simulator Screenshot" src="https://github.com/user-attachments/assets/2ac38f01-9ba1-49fc-9cca-07d1064e2ced" />
+  <img width="18%" height="auto" alt="Simulator Screenshot" src="https://github.com/user-attachments/assets/8cb26b39-d32e-4741-9041-e9cf4fc9f164" />
+  <img width="18%" height="auto" alt="Simulator Screenshot" src="https://github.com/user-attachments/assets/da192813-ec1d-4bcf-8c3f-e14db27838d7" />
+  <img width="18%" height="auto" alt="Simulator Screenshot" src="https://github.com/user-attachments/assets/53d12243-c18f-4739-83bf-231b7e0d18fe" />
+
+
 </div>
 
 ---
